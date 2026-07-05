@@ -9,7 +9,6 @@
     </header>
 
     <main class="c">
-      <!-- 3-Second Temporal Automatic Restart Delay Overlay Layout -->
       <div v-if="o" class="o">
         <h2 class="dead-title">SHIELDS CRUSHED</h2>
         <p>Re-cloning backup module soon...</p>
@@ -17,11 +16,11 @@
       <canvas ref="g" width="320" height="360"></canvas>
     </main>
 
-    <!-- Anchored Control Sheet for precise responsive delta tracking -->
+    <!-- Anchored Control Sheet with absolute bounded joystick tracking -->
     <footer class="f">
       <div class="pad-spacer"></div>
       <div class="ctrl-pad" ref="rPad" @touchstart.prevent="ts" @touchmove.prevent="tm" @touchend.prevent="te">
-        <div class="btn-inner">SLIDE Y</div>
+        <div class="btn-inner">STICK Y</div>
       </div>
     </footer>
   </div>
@@ -30,8 +29,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const s = ref(0), h = ref(0), o = ref(false), g = ref(null), hp = ref(100)
-let cn, ctx, t, py = 180, cv = [], treats = [], au = null, spd = 2, sy = 0, count = 0
+const s = ref(0), h = ref(0), o = ref(false), g = ref(null), hp = ref(100), rPad = ref(null)
+let cn, ctx, t, py = 180, cv = [], treats = [], au = null, spd = 2, dyVector = 0, count = 0
 
 const initAudio = () => {
   if (!au) au = new (window.AudioContext || window.webkitAudioContext)()
@@ -68,7 +67,7 @@ const playSound = (type) => {
 }
 
 const r = () => {
-  s.value = 0; hp.value = 100; o.value = false; py = 180; spd = 2; cv = []; treats = []; count = 0
+  s.value = 0; hp.value = 100; o.value = false; py = 180; spd = 2; dyVector = 0; cv = []; treats = []; count = 0
   for (let i = 0; i < 34; i++) {
     cv.push({ x: i * 10, top: 40, bot: 320 })
   }
@@ -76,20 +75,27 @@ const r = () => {
 
 const ts = (evt) => {
   initAudio()
-  if (evt.touches.length) sy = evt.touches.clientY
+  tm(evt)
 }
 
-// Fixed Delta Control System mapping touch height velocity changes directly to the Y position axis
+// Bounded Joystick Math: Converts pad touch distance relative to the button center into a fluid velocity vector
 const tm = (evt) => {
-  if (o.value || !evt.touches.length) return
-  const dy = evt.touches.clientY - sy
+  if (o.value || !evt.touches.length || !rPad.value) return
   
-  // Clean proportional multiplier shifting player position vertically
-  py = Math.max(12, Math.min(336, py + dy * 1.5))
-  sy = evt.touches.clientY
+  const rect = rPad.value.getBoundingClientRect()
+  const touchY = evt.touches[0].clientY
+  
+  // Calculate relative center of the joystick ring element
+  const cy = rect.top + rect.height / 2
+  
+  // Normalize direction vector scale (-1.0 up to +1.0)
+  const normY = (touchY - cy) / (rect.height / 2)
+  
+  // Assign a highly predictable moving speed multiplier capped inside bounds limits [6]
+  dyVector = Math.max(-1, Math.min(1, normY)) * 4.5
 }
 
-const te = () => { sy = 0 }
+const te = () => { dyVector = 0 }
 
 const tick = () => {
   if (o.value) return
@@ -99,31 +105,32 @@ const tick = () => {
   count++
   spd = 2 + (s.value * 0.03)
 
-  // Cavern path vector generation equations
+  // Apply fluid horizontal movement loop values using the smooth bounded thumb stick velocity [6]
+  py = Math.max(12, Math.min(336, py + dyVector))
+
   cv.forEach(p => { p.x -= spd })
   treats.forEach(tr => { tr.x -= spd })
 
-  if (cv.length && cv[0].x < -10) {
+  if (cv.length && cv.x < -10) {
     cv.shift()
     s.value += 1
     const last = cv[cv.length - 1]
     
-    // Wave calculations to swing, stretch, and skew terrain limits smoothly
-    let midY = 180 + Math.sin(count * 0.03) * 50
-    let thickness = 150 + Math.cos(count * 0.05) * 35 
+    // Smooth random terrain step parameters matching bounds limits
+    let midY = 180 + Math.sin(count * 0.03) * 55
+    let thickness = 145 + Math.cos(count * 0.05) * 35 
     
     let nextTop = Math.max(10, midY - thickness / 2)
     let nextBot = Math.min(350, midY + thickness / 2)
     
     cv.push({ x: 320, top: nextTop, bot: nextBot })
 
-    // Randomised item drop generator matrix
     if (Math.random() < 0.08 && treats.length < 3) {
       treats.push({ x: 320, y: nextTop + Math.random() * (nextBot - nextTop - 10) })
     }
   }
 
-  // Draw procedural polygon borders segments 
+  // Draw procedural polygon borders segments
   ctx.fillStyle = '#1c1c1e'
   ctx.beginPath()
   ctx.moveTo(cv[0]?.x || 0, 0)
@@ -146,7 +153,6 @@ const tick = () => {
 
     if (tr.x < 0) treats.splice(idx, 1)
 
-    // Bounding circle intersection metrics
     if (tr.x > 46 && tr.x < 66 && tr.y > py - 4 && tr.y < py + 16) {
       treats.splice(idx, 1)
       hp.value = Math.min(100, hp.value + 15)
@@ -154,7 +160,7 @@ const tick = () => {
     }
   })
 
-  // Cavern structure border hit tracking calculations
+  // Damage rate calculations
   const col = cv.find(p => p.x >= 48 && p.x <= 62)
   if (col && (py < col.top || (py + 12) > col.bot)) {
     if (count % 4 === 0) {
@@ -191,7 +197,7 @@ onUnmounted(() => clearInterval(t))
 .a { width: 100vw; height: 100vh; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px; font-family: sans-serif; box-sizing: border-box; user-select: none; overflow: hidden; }
 .b { text-align: center; margin-bottom: 5px; width: 100%; }
 h1 { margin: 0; font-size: 20px; text-transform: uppercase; color: #e2e8f0; letter-spacing: 1.5px; }
-p { margin: 4px 0 8px 0; color: #71717a; font-size: 13px; }
+p { margin: 4px 0; color: #71717a; font-size: 13px; }
 b { color: #fff; }
 .hp-track { width: 140px; height: 4px; background: #1c1c1e; margin: 0 auto; overflow: hidden; }
 .hp-bar { height: 100%; background: #ef4444; width: 100%; transition: width 0.1s linear; }
