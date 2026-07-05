@@ -1,0 +1,4 @@
+{
+  "name": "CaveRun",
+  "svgContent": "<path d=\"M2 4c5 3 7-1 12 2s9-2 8 0v14c-4-2-7 2-12-1s-7 1-8-2V4z\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\" fill=\"none\"></path><rect x=\"6\" y=\"9\" width=\"3\" height=\"3\" fill=\"currentColor\"></rect>"
+}
