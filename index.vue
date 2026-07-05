@@ -1,217 +1,99 @@
 <template>
-  <div class="a">
+  <div class="a" @touchstart="ts" @touchmove="tm" @touchend="te">
     <header class="b">
-      <h1>Cave Run</h1>
-      <p>Score: <b>{{ s }}</b> | Best: <b>{{ h }}</b></p>
-      <div class="hp-track">
-        <div class="hp-bar" :style="`width:${hp}%`"></div>
-      </div>
+      <h1>Cave</h1>
+      <p>S:<b>{{ s }}</b>|H:<b>{{ h }}%</b></p>
+      <div class="k"><div class="g" :style="`width:${h}%`"></div></div>
     </header>
-
     <main class="c">
-      <div v-if="o" class="o">
-        <h2 class="dead-title">SHIELDS CRUSHED</h2>
-        <p>Re-cloning backup module soon...</p>
-      </div>
-      <canvas ref="g" width="320" height="360"></canvas>
+      <div v-if="o" class="o"><h2>{{ h<=0?'DESTROYED':'REBOOTING' }}</h2></div>
+      <canvas ref="v" width="320" height="340"></canvas>
     </main>
-
-    <!-- Anchored Control Sheet with absolute bounded joystick tracking -->
     <footer class="f">
-      <div class="pad-spacer"></div>
-      <div class="ctrl-pad" ref="rPad" @touchstart.prevent="ts" @touchmove.prevent="tm" @touchend.prevent="te">
-        <div class="btn-inner">STICK Y</div>
-      </div>
+      <div class="p" id="l">FIRE</div>
+      <div class="p" id="r">STICK</div>
     </footer>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-
-const s = ref(0), h = ref(0), o = ref(false), g = ref(null), hp = ref(100), rPad = ref(null)
-let cn, ctx, t, py = 180, cv = [], treats = [], au = null, spd = 2, dyVector = 0, count = 0
-
-const initAudio = () => {
-  if (!au) au = new (window.AudioContext || window.webkitAudioContext)()
+const s=ref(0), h=ref(100), o=ref(false), v=ref(null)
+let cx, ctx, t, px=50, py=170, cv=[], tr=[], en=[], b=[], au=null, vx=0, vy=0, n=0
+const audio=(f,t,g,d)=>{
+  if(!au)au=new(window.AudioContext||window.webkitAudioContext)()
+  let o=au.createOscillator(),q=au.createGain()
+  o.type=t;o.frequency.setValueAtTime(f,au.currentTime)
+  q.gain.setValueAtTime(g,au.currentTime);q.gain.linearRampToValueAtTime(0,au.currentTime+d)
+  o.connect(q);q.connect(au.destination);o.start();o.stop(au.currentTime+d)
 }
-
-const playSound = (type) => {
-  if (!au) return
-  const osc = au.createOscillator()
-  const gain = au.createGain()
-  osc.connect(gain)
-  gain.connect(au.destination)
-
-  if (type === 'hit') {
-    osc.type = 'sawtooth'
-    osc.frequency.setValueAtTime(100, au.currentTime)
-    gain.gain.setValueAtTime(0.15, au.currentTime)
-    gain.gain.linearRampToValueAtTime(0.01, au.currentTime + 0.08)
-    osc.start(); osc.stop(au.currentTime + 0.08)
-  } else if (type === 'heal') {
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(400, au.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(800, au.currentTime + 0.1)
-    gain.gain.setValueAtTime(0.1, au.currentTime)
-    gain.gain.linearRampToValueAtTime(0.01, au.currentTime + 0.1)
-    osc.start(); osc.stop(au.currentTime + 0.1)
-  } else if (type === 'boom') {
-    osc.type = 'triangle'
-    osc.frequency.setValueAtTime(60, au.currentTime)
-    osc.frequency.linearRampToValueAtTime(10, au.currentTime + 0.4)
-    gain.gain.setValueAtTime(0.3, au.currentTime)
-    gain.gain.linearRampToValueAtTime(0.01, au.currentTime + 0.4)
-    osc.start(); osc.stop(au.currentTime + 0.4)
+const r=()=>{ s.value=0;h.value=100;o.value=false;px=50;py=170;vx=0;vy=0;cv=[];tr=[];en=[];b=[];n=0;for(let i=0;i<34;i++)cv.push({x:i*10,t:30,b:310}) }
+const ts=(e)=>{
+  if(!cx||o.value)return
+  let r=cx.getBoundingClientRect()
+  for(let t of e.touches){
+    let x=t.clientX-r.left, y=t.clientY-r.top
+    if(x<160&&b.length<4){b.push({x:px+12,y:py+6});audio(600,'sawtooth',0.1,0.08)}
   }
 }
-
-const r = () => {
-  s.value = 0; hp.value = 100; o.value = false; py = 180; spd = 2; dyVector = 0; cv = []; treats = []; count = 0
-  for (let i = 0; i < 34; i++) {
-    cv.push({ x: i * 10, top: 40, bot: 320 })
-  }
-}
-
-const ts = (evt) => {
-  initAudio()
-  tm(evt)
-}
-
-// Bounded Joystick Math: Converts pad touch distance relative to the button center into a fluid velocity vector
-const tm = (evt) => {
-  if (o.value || !evt.touches.length || !rPad.value) return
-  
-  const rect = rPad.value.getBoundingClientRect()
-  const touchY = evt.touches[0].clientY
-  
-  // Calculate relative center of the joystick ring element
-  const cy = rect.top + rect.height / 2
-  
-  // Normalize direction vector scale (-1.0 up to +1.0)
-  const normY = (touchY - cy) / (rect.height / 2)
-  
-  // Assign a highly predictable moving speed multiplier capped inside bounds limits [6]
-  dyVector = Math.max(-1, Math.min(1, normY)) * 4.5
-}
-
-const te = () => { dyVector = 0 }
-
-const tick = () => {
-  if (o.value) return
-  ctx.fillStyle = '#111112'
-  ctx.fillRect(0, 0, 320, 360)
-
-  count++
-  spd = 2 + (s.value * 0.03)
-
-  // Apply fluid horizontal movement loop values using the smooth bounded thumb stick velocity [6]
-  py = Math.max(12, Math.min(336, py + dyVector))
-
-  cv.forEach(p => { p.x -= spd })
-  treats.forEach(tr => { tr.x -= spd })
-
-  if (cv.length && cv.x < -10) {
-    cv.shift()
-    s.value += 1
-    const last = cv[cv.length - 1]
-    
-    // Smooth random terrain step parameters matching bounds limits
-    let midY = 180 + Math.sin(count * 0.03) * 55
-    let thickness = 145 + Math.cos(count * 0.05) * 35 
-    
-    let nextTop = Math.max(10, midY - thickness / 2)
-    let nextBot = Math.min(350, midY + thickness / 2)
-    
-    cv.push({ x: 320, top: nextTop, bot: nextBot })
-
-    if (Math.random() < 0.08 && treats.length < 3) {
-      treats.push({ x: 320, y: nextTop + Math.random() * (nextBot - nextTop - 10) })
+const tm=(e)=>{
+  if(!cx||o.value)return
+  let r=cx.getBoundingClientRect()
+  for(let t of e.touches){
+    let x=t.clientX-r.left, y=t.clientY-r.top
+    if(x>=160){
+      vx=Math.max(-1,Math.min(1,(x-240)/40))*5
+      vy=Math.max(-1,Math.min(1,(y-(r.height-50))/40))*5
     }
   }
-
-  // Draw procedural polygon borders segments
-  ctx.fillStyle = '#1c1c1e'
-  ctx.beginPath()
-  ctx.moveTo(cv[0]?.x || 0, 0)
-  cv.forEach(p => ctx.lineTo(p.x, p.top))
-  ctx.lineTo(320, 0)
-  ctx.fill()
-
-  ctx.beginPath()
-  ctx.moveTo(cv[0]?.x || 0, 360)
-  cv.forEach(p => ctx.lineTo(p.x, p.bot))
-  ctx.lineTo(320, 360)
-  ctx.fill()
-
-  // Catching treat pickups calculation vectors
-  treats.forEach((tr, idx) => {
-    ctx.fillStyle = '#fff'
-    ctx.beginPath()
-    ctx.arc(tr.x, tr.y, 4, 0, Math.PI * 2)
-    ctx.fill()
-
-    if (tr.x < 0) treats.splice(idx, 1)
-
-    if (tr.x > 46 && tr.x < 66 && tr.y > py - 4 && tr.y < py + 16) {
-      treats.splice(idx, 1)
-      hp.value = Math.min(100, hp.value + 15)
-      playSound('heal')
-    }
-  })
-
-  // Damage rate calculations
-  const col = cv.find(p => p.x >= 48 && p.x <= 62)
-  if (col && (py < col.top || (py + 12) > col.bot)) {
-    if (count % 4 === 0) {
-      hp.value -= 6
-      playSound('hit')
-    }
-  }
-
-  if (hp.value <= 0) {
-    hp.value = 0; o.value = true; playSound('boom')
-    if (s.value > h.value) h.value = s.value
-    setTimeout(() => { r() }, 3000)
-  }
-
-  // Render player block asset
-  ctx.fillStyle = '#fff'
-  ctx.fillRect(50, py, 12, 12)
 }
-
-onMounted(() => {
-  cn = g.value; ctx = cn.getContext('2d')
-  r(); t = setInterval(tick, 1000 / 60)
-  
-  window.addEventListener('keydown', e => {
-    initAudio()
-    if (e.key === 'ArrowUp') py = Math.max(12, py - 16)
-    if (e.key === 'ArrowDown') py = Math.min(336, py + 16)
-  })
-})
-onUnmounted(() => clearInterval(t))
+const te=(e)=>{if(!e.touches.length){vx=0;vy=0}}
+const tick=()=>{
+  if(o.value)return
+  ctx.fillStyle='#111';ctx.fillRect(0,0,320,340)
+  n++;let speed=5+(s.value*0.05)
+  px=Math.max(10,Math.min(290,px+vx));py=Math.max(10,Math.min(315,py+vy))
+  cv.forEach(p=>p.x-=speed);tr.forEach(t=>t.x-=speed);en.forEach(e=>e.x-=speed*1.2);b.forEach(b=>b.x+=8)
+  b=b.filter(i=>i.x<320)
+  if(cv[0]&&cv[0].x<-10){
+    cv.shift();s.value++
+    let last=cv[cv.length-1], mY=170+Math.sin(n*0.04)*60, th=130+Math.cos(n*0.06)*30
+    let nT=Math.max(10,mY-th/2), nB=Math.min(330,mY+th/2)
+    cv.push({x:320,t:nT,b:nB})
+    if(Math.random()<0.12&&tr.length<3)tr.push({x:320,y:nT+Math.random()*(nB-nT-10)})
+    if(Math.random()<0.15&&en.length<4)en.push({x:320,y:nT+Math.random()*(nB-nT-15)})
+  }
+  ctx.fillStyle='#1c1c1e';ctx.beginPath();ctx.moveTo(cv[0]?.x||0,0);cv.forEach(p=>ctx.lineTo(p.x,p.t));ctx.lineTo(320,0);ctx.fill()
+  ctx.beginPath();ctx.moveTo(cv[0]?.x||0,340);cv.forEach(p=>ctx.lineTo(p.x,p.b));ctx.lineTo(320,340);ctx.fill()
+  b.forEach(i=>{ctx.fillStyle='#fff';ctx.fillRect(i.x,i.y,6,2)})
+  tr.forEach((t,i)=>{
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(t.x,t.y,4,0,Math.PI*2);ctx.fill()
+    if(t.x>px&&t.x<px+12&&t.y>py&&t.y<py+12){tr.splice(i,1);h.value=Math.min(100,h.value+15);audio(440,'sine',0.1,0.1)}
+  });tr=tr.filter(t=>t.x>0)
+  en.forEach((e,i)=>{
+    ctx.fillStyle='#ef4444';ctx.fillRect(e.x,e.y,14,10)
+    b.forEach((bl,bi)=>{
+      if(bl.x>e.x&&bl.x<e.x+14&&bl.y>e.y&&bl.y<e.y+10){en.splice(i,1);b.splice(bi,1);s.value+=10;audio(150,'triangle',0.2,0.15)}
+    })
+    if(e.x>px&&e.x<px+12&&e.y>py-10&&e.y<py+12){en.splice(i,1);h.value-=20;audio(100,'sawtooth',0.2,0.1)}
+  });en=en.filter(e=>e.x>0)
+  let c=cv.find(p=>p.x>=px&&p.x<=px+12)
+  if(c&&(py<c.t||py+12>c.b)&&n%4===0){h.value-=5;audio(90,'sawtooth',0.15,0.05)}
+  if(h.value<=0){h.value=0;o.value=true;audio(50,'triangle',0.4,0.5);setTimeout(r,3000)}
+  ctx.fillStyle='#fff';ctx.fillRect(px,py,12,12)
+}
+onMounted(()=>{cx=v.value;ctx=cx.getContext('2d');r();t=setInterval(tick,16)})
+onUnmounted(()=>clearInterval(t))
 </script>
 
 <style scoped>
-.a { width: 100vw; height: 100vh; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px; font-family: sans-serif; box-sizing: border-box; user-select: none; overflow: hidden; }
-.b { text-align: center; margin-bottom: 5px; width: 100%; }
-h1 { margin: 0; font-size: 20px; text-transform: uppercase; color: #e2e8f0; letter-spacing: 1.5px; }
-p { margin: 4px 0; color: #71717a; font-size: 13px; }
-b { color: #fff; }
-.hp-track { width: 140px; height: 4px; background: #1c1c1e; margin: 0 auto; overflow: hidden; }
-.hp-bar { height: 100%; background: #ef4444; width: 100%; transition: width 0.1s linear; }
-.c { width: 100%; max-width: 320px; aspect-ratio: 320 / 360; position: relative; border: 2px solid #1c1c1e; box-shadow: 0 20px 40px rgba(0,0,0,0.6); background: #111112; }
-canvas { display: block; width: 100%; height: 100%; }
-.o { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
-.dead-title { color: #ef4444; margin: 0; font-size: 18px; letter-spacing: 2px; text-transform: uppercase; animation: flash 0.5s steps(2, start) infinite; }
-.o p { color: #71717a; font-size: 11px; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-@keyframes flash { to { visibility: hidden; } }
-.f { width: 100%; max-width: 320px; display: flex; justify-content: space-between; padding: 16px 0; box-sizing: border-box; }
-.pad-spacer { flex: 1; }
-.ctrl-pad { width: 76px; height: 76px; background: #111112; border: 2px solid #2c2c2e; border-radius: 50%; display: flex; align-items: center; justify-content: center; touch-action: none; cursor: pointer; }
-.ctrl-pad:active { background: #1c1c1e; border-color: #ef4444; }
-.btn-inner { font-size: 9px; font-weight: 800; color: #71717a; letter-spacing: 0.5px; text-transform: uppercase; pointer-events: none; }
-.ctrl-pad:active .btn-inner { color: #fff; }
-@media (max-width: 360px) { .c { max-width: 90vw; } .f { max-width: 90vw; } }
+.a{width:100vw;height:100vh;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:12px;box-sizing:border-box;font-family:sans-serif;user-select:none;overflow:hidden;}
+.b{text-align:center;width:100%;}h1{margin:0;font-size:18px;text-transform:uppercase;letter-spacing:1px;}.k{width:120px;height:4px;background:#222;margin:4px auto;}.g{height:100%;background:#ef4444;transition:width .1s;}
+p{margin:2px;color:#71717a;font-size:12px;}b{color:#fff;}
+.c{width:100%;max-width:320px;aspect-ratio:320/340;position:relative;border:2px solid #1c1c1e;background:#111;}
+canvas{display:block;width:100%;height:100%;}
+.o{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.95);display:flex;align-items:center;justify-content:center;}h2{color:#ef4444;font-size:16px;}
+.f{width:100%;max-width:320px;display:flex;justify-content:space-between;padding:8px 0;}
+.p{width:70px;height:70px;background:#111;border:2px solid #2c2c2e;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#71717a;cursor:pointer;}
+.p:active{background:#1c1c1e;border-color:#ef4444;color:#fff;}
 </style>
