@@ -32,7 +32,7 @@ const ts=(e)=>{
   if(!cx||o.value)return
   let r=cx.getBoundingClientRect()
   for(let t of e.touches){
-    let x=t.clientX-r.left, y=t.clientY-r.top
+    let x=t.clientX-r.left
     if(x<160&&b.length<4){b.push({x:px+12,y:py+6});audio(600,'sawtooth',0.1,0.08)}
   }
 }
@@ -42,8 +42,9 @@ const tm=(e)=>{
   for(let t of e.touches){
     let x=t.clientX-r.left, y=t.clientY-r.top
     if(x>=160){
-      vx=Math.max(-1,Math.min(1,(x-240)/40))*5
-      vy=Math.max(-1,Math.min(1,(y-(r.height-50))/40))*5
+      // Calibrated sensitivity matrix: reduced maximum deflection multiplier to 2.2 for steady navigation
+      vx=Math.max(-1,Math.min(1,(x-240)/45))*2.2
+      vy=Math.max(-1,Math.min(1,(y-(r.height-50))/45))*2.2
     }
   }
 }
@@ -55,7 +56,7 @@ const tick=()=>{
   px=Math.max(10,Math.min(290,px+vx));py=Math.max(10,Math.min(315,py+vy))
   cv.forEach(p=>p.x-=speed);tr.forEach(t=>t.x-=speed);en.forEach(e=>e.x-=speed*1.2);b.forEach(b=>b.x+=8)
   b=b.filter(i=>i.x<320)
-  if(cv[0]&&cv[0].x<-10){
+  if(cv.length&&cv[0].x<-10){
     cv.shift();s.value++
     let last=cv[cv.length-1], mY=170+Math.sin(n*0.04)*60, th=130+Math.cos(n*0.06)*30
     let nT=Math.max(10,mY-th/2), nB=Math.min(330,mY+th/2)
@@ -82,8 +83,8 @@ const tick=()=>{
   if(h.value<=0){h.value=0;o.value=true;audio(50,'triangle',0.4,0.5);setTimeout(r,3000)}
   ctx.fillStyle='#fff';ctx.fillRect(px,py,12,12)
 }
-onMounted(()=>{cx=v.value;ctx=cx.getContext('2d');r();t=setInterval(tick,16)})
-onUnmounted(()=>clearInterval(t))
+onMounted(() => { cx=v.value;ctx=cx.getContext('2d');r();t=setInterval(tick,16) })
+onUnmounted(() => clearInterval(t))
 </script>
 
 <style scoped>
