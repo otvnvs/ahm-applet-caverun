@@ -18,8 +18,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+// Direct static compile-time ES module file asset lookup mapping
+import cfg from './settings.json'
+
 const s=ref(0), h=ref(100), o=ref(false), v=ref(null)
 let cx, ctx, t, px=50, py=170, cv=[], tr=[], en=[], b=[], au=null, vx=0, vy=0, n=0
+
 const audio=(f,t,g,d)=>{
   if(!au)au=new(window.AudioContext||window.webkitAudioContext)()
   let o=au.createOscillator(),q=au.createGain()
@@ -27,7 +31,9 @@ const audio=(f,t,g,d)=>{
   q.gain.setValueAtTime(g,au.currentTime);q.gain.linearRampToValueAtTime(0,au.currentTime+d)
   o.connect(q);q.connect(au.destination);o.start();o.stop(au.currentTime+d)
 }
+
 const r=()=>{ s.value=0;h.value=100;o.value=false;px=50;py=170;vx=0;vy=0;cv=[];tr=[];en=[];b=[];n=0;for(let i=0;i<34;i++)cv.push({x:i*10,t:30,b:310}) }
+
 const ts=(e)=>{
   if(!cx||o.value)return
   let r=cx.getBoundingClientRect()
@@ -36,27 +42,33 @@ const ts=(e)=>{
     if(x<160&&b.length<4){b.push({x:px+12,y:py+6});audio(600,'sawtooth',0.1,0.08)}
   }
 }
+
 const tm=(e)=>{
   if(!cx||o.value)return
   let r=cx.getBoundingClientRect()
   for(let t of e.touches){
     let x=t.clientX-r.left, y=t.clientY-r.top
     if(x>=160){
-      // Calibrated sensitivity matrix: reduced maximum deflection multiplier to 2.2 for steady navigation
-      vx=Math.max(-1,Math.min(1,(x-240)/45))*2.2
-      vy=Math.max(-1,Math.min(1,(y-(r.height-50))/45))*2.2
+      vx=Math.max(-1,Math.min(1,(x-240)/cfg.JOY_DEADZONE))*cfg.STICK_SENSITIVITY
+      vy=Math.max(-1,Math.min(1,(y-(r.height-50))/cfg.JOY_DEADZONE))*cfg.STICK_SENSITIVITY
     }
   }
 }
+
 const te=(e)=>{if(!e.touches.length){vx=0;vy=0}}
+
 const tick=()=>{
   if(o.value)return
   ctx.fillStyle='#111';ctx.fillRect(0,0,320,340)
-  n++;let speed=5+(s.value*0.05)
-  px=Math.max(10,Math.min(290,px+vx));py=Math.max(10,Math.min(315,py+vy))
+  n++;let speed=cfg.START_SPEED+(s.value*cfg.SPEED_ACCEL)
+  
+  px=Math.max(10,Math.min(290,px+vx))
+  py=Math.max(10,Math.min(315,py+vy))
+  
   cv.forEach(p=>p.x-=speed);tr.forEach(t=>t.x-=speed);en.forEach(e=>e.x-=speed*1.2);b.forEach(b=>b.x+=8)
   b=b.filter(i=>i.x<320)
-  if(cv.length&&cv[0].x<-10){
+  
+  if(cv.length&&cv.x<-10){
     cv.shift();s.value++
     let last=cv[cv.length-1], mY=170+Math.sin(n*0.04)*60, th=130+Math.cos(n*0.06)*30
     let nT=Math.max(10,mY-th/2), nB=Math.min(330,mY+th/2)
@@ -64,13 +76,23 @@ const tick=()=>{
     if(Math.random()<0.12&&tr.length<3)tr.push({x:320,y:nT+Math.random()*(nB-nT-10)})
     if(Math.random()<0.15&&en.length<4)en.push({x:320,y:nT+Math.random()*(nB-nT-15)})
   }
-  ctx.fillStyle='#1c1c1e';ctx.beginPath();ctx.moveTo(cv[0]?.x||0,0);cv.forEach(p=>ctx.lineTo(p.x,p.t));ctx.lineTo(320,0);ctx.fill()
-  ctx.beginPath();ctx.moveTo(cv[0]?.x||0,340);cv.forEach(p=>ctx.lineTo(p.x,p.b));ctx.lineTo(320,340);ctx.fill()
+  
+  ctx.fillStyle='#1c1c1e';ctx.beginPath();ctx.moveTo(cv?.x||0,0);cv.forEach(p=>ctx.lineTo(p.x,p.t));ctx.lineTo(320,0);ctx.fill()
+  ctx.beginPath();ctx.moveTo(cv?.x||0,340);cv.forEach(p=>ctx.lineTo(p.x,p.b));ctx.lineTo(320,340);ctx.fill()
+  
+  let c=cv.find(p=>p.x>=px&&p.x<=px+12)
+  if(c){
+    if(py<c.t)py=c.t
+    if(py+12>c.b)py=c.b-12
+    if((py<=c.t||py+12>=c.b)&&n%4===0){h.value-=5;audio(90,'sawtooth',0.15,0.05)}
+  }
+  
   b.forEach(i=>{ctx.fillStyle='#fff';ctx.fillRect(i.x,i.y,6,2)})
   tr.forEach((t,i)=>{
     ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(t.x,t.y,4,0,Math.PI*2);ctx.fill()
     if(t.x>px&&t.x<px+12&&t.y>py&&t.y<py+12){tr.splice(i,1);h.value=Math.min(100,h.value+15);audio(440,'sine',0.1,0.1)}
   });tr=tr.filter(t=>t.x>0)
+  
   en.forEach((e,i)=>{
     ctx.fillStyle='#ef4444';ctx.fillRect(e.x,e.y,14,10)
     b.forEach((bl,bi)=>{
@@ -78,12 +100,16 @@ const tick=()=>{
     })
     if(e.x>px&&e.x<px+12&&e.y>py-10&&e.y<py+12){en.splice(i,1);h.value-=20;audio(100,'sawtooth',0.2,0.1)}
   });en=en.filter(e=>e.x>0)
-  let c=cv.find(p=>p.x>=px&&p.x<=px+12)
-  if(c&&(py<c.t||py+12>c.b)&&n%4===0){h.value-=5;audio(90,'sawtooth',0.15,0.05)}
+  
   if(h.value<=0){h.value=0;o.value=true;audio(50,'triangle',0.4,0.5);setTimeout(r,3000)}
   ctx.fillStyle='#fff';ctx.fillRect(px,py,12,12)
 }
-onMounted(() => { cx=v.value;ctx=cx.getContext('2d');r();t=setInterval(tick,16) })
+
+onMounted(() => {
+  cx=v.value;ctx=cx.getContext('2d')
+  r();t=setInterval(tick,16)
+})
+
 onUnmounted(() => clearInterval(t))
 </script>
 

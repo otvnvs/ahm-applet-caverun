@@ -1,0 +1,6 @@
+{
+  "START_SPEED": 2.0,
+  "SPEED_ACCEL": 0.04,
+  "STICK_SENSITIVITY": 3.8,
+  "JOY_DEADZONE": 45
+}
